@@ -64,34 +64,6 @@ npm install        # or: yarn install
 
 ---
 
-## ⚙️ Environment Setup
-
-Create `.env.local` in the project root:
-
-```bash
-touch .env.local
-```
-
-Minimal required variables:
-
-```env
-UPSTASH_REDIS_REST_URL="YOUR_REDIS_URL"
-UPSTASH_REDIS_REST_TOKEN="YOUR_REDIS_TOKEN"
-
-GOOGLE_CLIENT_ID="YOUR_GOOGLE_CLIENT_ID"
-GOOGLE_CLIENT_SECRET="YOUR_GOOGLE_SECRET"
-
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="YOUR_NEXTAUTH_SECRET"
-
-PUSHER_APP_ID="YOUR_PUSHER_APP_ID"
-NEXT_PUBLIC_PUSHER_APP_KEY="YOUR_PUSHER_PUBLIC_KEY"
-PUSHER_APP_SECRET="YOUR_PUSHER_SECRET"
-```
-
-You can also add a committed `.env.example` with placeholder values.
-
----
 
 ## 🔑 How to Generate All Required Keys
 
