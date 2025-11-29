@@ -5,6 +5,7 @@ import { toPusherKey } from "@/lib/utils";
 import { User } from "lucide-react";
 import Link from "next/link";
 import { FC, useEffect, useState } from "react";
+import { toast } from "react-hot-toast";
 
 interface FriendRequestSidebarOptionsProps {
   sessionId: string;
@@ -24,6 +25,7 @@ const FriendRequestSidebarOptions: FC<FriendRequestSidebarOptionsProps> = ({
       toPusherKey(`user:${sessionId}:incoming_friend_requests`)
     );
     pusherClient.subscribe(toPusherKey(`user:${sessionId}:friends`));
+    pusherClient.subscribe(toPusherKey(`user:${sessionId}:friend_requests`));
 
     const friendRequestHandler = () => {
       setUnseenRequestCount((prev) => prev + 1);
@@ -33,17 +35,27 @@ const FriendRequestSidebarOptions: FC<FriendRequestSidebarOptionsProps> = ({
       setUnseenRequestCount((prev) => prev - 1);
     };
 
+    const friendRequestDeniedHandler = (data: {
+      deniedById: string;
+      deniedByName: string;
+    }) => {
+      toast.error(`${data.deniedByName} denied your friend request`);
+    };
+
     pusherClient.bind("incoming_friend_requests", friendRequestHandler);
     pusherClient.bind("new_friend", addedFriendHandler);
+    pusherClient.bind("friend_request_denied", friendRequestDeniedHandler);
 
     return () => {
       pusherClient.unsubscribe(
         toPusherKey(`user:${sessionId}:incoming_friend_requests`)
       );
       pusherClient.unsubscribe(toPusherKey(`user:${sessionId}:friends`));
+      pusherClient.unsubscribe(toPusherKey(`user:${sessionId}:friend_requests`));
 
       pusherClient.unbind("new_friend", addedFriendHandler);
       pusherClient.unbind("incoming_friend_requests", friendRequestHandler);
+      pusherClient.unbind("friend_request_denied", friendRequestDeniedHandler);
     };
   }, [sessionId]);
 

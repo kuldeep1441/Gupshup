@@ -86,35 +86,86 @@ export async function POST(req: Request) {
 
     const message = messageValidator.parse(messageData);
 
-    // notify all connected chat room clients
-    await pusherServer.trigger(
-      toPusherKey(`chat:${chat.id}`),
-      "incoming-message",
-      message
-    );
-
-    // Notify all other members of this chat (group or 1-to-1)
-    const otherMemberIds = chat.memberIds.filter((id) => id !== senderId);
-
-    await Promise.all(
-      otherMemberIds.map((memberId) =>
-        pusherServer.trigger(
-          toPusherKey(`user:${memberId}:chats`),
-          "new_message",
-          {
-            ...message,
-            senderImg: sender.image,
-            senderName: sender.name,
-          }
-        )
-      )
-    );
-
-    // all valid, send the message
+    // Save message to Redis first
     await db.zadd(`chat:${chat.id}:messages`, {
       score: timestamp,
       member: JSON.stringify(message),
     });
+
+    // Then notify all connected chat room clients (including sender)
+    const pusherChannelName = toPusherKey(`chat:${chat.id}`);
+    console.log(`[API] Triggering Pusher event on channel: ${pusherChannelName} for chatId: ${chat.id}`);
+    console.log(`[API] Message payload:`, {
+      id: message.id,
+      chatId: message.chatId,
+      senderId: message.senderId,
+      text: message.text.substring(0, 50) + (message.text.length > 50 ? '...' : ''),
+      timestamp: message.timestamp,
+    });
+    console.log(`[API] Chat memberIds:`, chat.memberIds);
+    let pusherSuccess = false;
+    try {
+      const result = await pusherServer.trigger(
+        pusherChannelName,
+        "incoming-message",
+        message
+      );
+      console.log(`[API] ✅ Successfully triggered Pusher event on channel: ${pusherChannelName}`, result);
+      pusherSuccess = true;
+    } catch (pusherError: any) {
+      console.error(`[API] ❌ Error triggering Pusher event on channel ${pusherChannelName}:`, pusherError);
+      
+      // Check for quota exceeded error
+      const errorCode = pusherError?.status || pusherError?.code || pusherError?.data?.code;
+      const errorMessage = pusherError?.message || pusherError?.data?.message || "";
+      
+      if (errorCode === 4004 || errorMessage.includes("over quota") || errorMessage.includes("quota")) {
+        console.error(`[API] ⚠️ PUSHER QUOTA EXCEEDED (Code: 4004)`);
+        console.error(`[API] Message saved to Redis but real-time delivery failed. User will see message on page refresh.`);
+        // Message is already saved to Redis, so it's not lost
+        // Return success but log the quota error for monitoring
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: "Message saved but real-time delivery unavailable due to quota limits",
+          pusherQuotaExceeded: true 
+        }), { 
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+      
+      // For other Pusher errors, still return success since message is saved
+      // Continue even if Pusher fails - message is already saved to Redis
+      // This ensures messages aren't lost even if Pusher is down
+    }
+
+    // Notify all other members of this chat (group or 1-to-1) for sidebar updates
+    // Only if the main channel trigger was successful (to avoid quota issues)
+    if (pusherSuccess) {
+      const otherMemberIds = chat.memberIds.filter((id) => id !== senderId);
+
+      try {
+        await Promise.all(
+          otherMemberIds.map((memberId) =>
+            pusherServer.trigger(
+              toPusherKey(`user:${memberId}:chats`),
+              "new_message",
+              {
+                ...message,
+                senderImg: sender.image,
+                senderName: sender.name,
+              }
+            ).catch((err) => {
+              // Silently fail sidebar notifications to avoid breaking message sending
+              console.warn(`[API] Failed to notify sidebar for user ${memberId}:`, err);
+            })
+          )
+        );
+      } catch (sidebarError) {
+        // Silently fail sidebar notifications to avoid breaking message sending
+        console.warn(`[API] Failed to send sidebar notifications:`, sidebarError);
+      }
+    }
 
     return new Response("OK");
   } catch (error) {

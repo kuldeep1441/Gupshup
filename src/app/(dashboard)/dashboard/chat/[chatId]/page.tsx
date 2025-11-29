@@ -1,6 +1,7 @@
-import ChatInput from "@/components/ChatInput";
-import Messages from "@/components/Messages";
+import ChatWrapper from "@/components/ChatWrapper";
+import GroupChatMembers from "@/components/GroupChatMembers";
 import { fetchRedis } from "@/helpers/redis";
+import { getFriendsByUserId } from "@/helpers/get-friends-by-user-id";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { messageArrayValidator } from "@/lib/validations/message";
@@ -37,6 +38,7 @@ async function getChatMessages(chatId: string) {
 
 const page = async ({ params }: PageProps) => {
   const { chatId } = params;
+  console.log('check', chatId)
   const session = await getServerSession(authOptions);
   if (!session) notFound();
 
@@ -85,14 +87,20 @@ const page = async ({ params }: PageProps) => {
     })
   );
 
-  const isTwoPersonChat = participants.length === 2;
+  // Determine if it's a group chat: either has more than 2 members OR has a custom name (not "Direct message")
+  // This ensures groups remain groups even if members are removed down to 2 or 1
+  const isGroupChat = participants.length > 2 || (participants.length >= 1 && chat.name !== "Direct message");
+  const isTwoPersonChat = participants.length === 2 && chat.name === "Direct message";
   const chatPartner =
     isTwoPersonChat && participants.find((p) => p.id !== user.id);
+
+  // Fetch friends list for add/remove functionality (for both 2-person and group chats)
+  const friends = await getFriendsByUserId(user.id);
 
   const initialMessages = await getChatMessages(chatId);
 
   return (
-    <div className="flex-1 justify-between flex flex-col h-full max-h-[calc(100vh-6rem)]">
+    <div className="flex-1 justify-between flex flex-col h-full">
       <div className="flex sm:items-center justify-between py-3 border-b-2 border-gray-200">
         <div className="relative flex items-center space-x-4">
           {isTwoPersonChat && chatPartner ? (
@@ -134,16 +142,30 @@ const page = async ({ params }: PageProps) => {
             </div>
           )}
         </div>
+        
+        {/* Show GroupChatMembers only for group chats */}
+        {/* Individual chats (2-person with "Direct message" name) do NOT have add/remove friend functionality */}
+        {/* Groups remain groups even if they have 1 or 2 members */}
+        {isGroupChat && (
+          <GroupChatMembers
+            chatId={chatId}
+            currentUserId={session.user.id}
+            participants={participants}
+            friends={friends}
+            isGroupChat={isGroupChat}
+            chatName={chat.name}
+          />
+        )}
       </div>
 
-      <Messages
+      <ChatWrapper
         chatId={chatId}
         participants={participants}
         sessionImg={session.user.image}
         sessionId={session.user.id}
         initialMessages={initialMessages}
+        chatName={chat.name}
       />
-      <ChatInput chatId={chatId} chatName={chat.name} />
     </div>
   );
 };

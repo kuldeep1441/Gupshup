@@ -25,6 +25,12 @@ interface Chat {
    * All users that are members of this chat (including the current user).
    */
   memberIds: string[];
+
+  /**
+   * Creation timestamp in milliseconds since epoch.
+   * Only set for groups (not for individual chats created via message sending).
+   */
+  createdAt?: number;
 }
 
 /**

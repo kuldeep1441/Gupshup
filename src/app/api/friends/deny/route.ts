@@ -1,5 +1,8 @@
+import { fetchRedis } from "@/helpers/redis";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { pusherServer } from "@/lib/pusher";
+import { toPusherKey } from "@/lib/utils";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
 
@@ -13,6 +16,26 @@ export async function POST(req: Request) {
     }
 
     const { id: idToDeny } = z.object({ id: z.string() }).parse(body);
+
+    // Get the user who sent the request to notify them
+    const requesterRaw = (await fetchRedis(
+      "get",
+      `user:${idToDeny}`
+    )) as string | null;
+    
+    const requester = requesterRaw ? (JSON.parse(requesterRaw) as User) : null;
+
+    // Notify the requester that their friend request was denied
+    if (requester) {
+      await pusherServer.trigger(
+        toPusherKey(`user:${idToDeny}:friend_requests`),
+        "friend_request_denied",
+        {
+          deniedById: session.user.id,
+          deniedByName: session.user.name,
+        }
+      );
+    }
 
     await db.srem(`user:${session.user.id}:incoming_friend_requests`, idToDeny);
 

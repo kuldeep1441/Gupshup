@@ -10,22 +10,34 @@ import SignOutButton from "./SignOutButton";
 import Button, { buttonVariants } from "./common/Button";
 import FriendRequestSidebarOptions from "./FriendRequestSidebarOptions";
 import SidebarChatList from "./SidebarChatList";
+import ChatsList from "./ChatsList";
+import AllFriendsList from "./AllFriendsList";
 import { Session } from "next-auth";
 import { SidebarOption } from "@/types/typings";
 import { usePathname } from "next/navigation";
 
 interface MobileChatLayoutProps {
-  friends: User[];
+  chats: {
+    chat: Chat;
+    displayName: string;
+  }[];
+  groups: {
+    chat: Chat;
+    displayName: string;
+  }[];
   session: Session;
   sidebarOptions: SidebarOption[];
   unseenRequestCount: number;
+  friends: User[];
 }
 
 const MobileChatLayout: FC<MobileChatLayoutProps> = ({
-  friends,
+  chats,
+  groups,
   session,
   sidebarOptions,
   unseenRequestCount,
+  friends,
 }) => {
   const [open, setOpen] = useState<boolean>(false);
 
@@ -83,18 +95,24 @@ const MobileChatLayout: FC<MobileChatLayoutProps> = ({
                       <div className="relative mt-6 flex-1 px-4 sm:px-6">
                         {/* Content */}
 
-                        {friends.length > 0 ? (
-                          <div className="text-xs font-semibold leading-6 text-gray-400">
-                            Your chats
-                          </div>
-                        ) : null}
-
                         <nav className="flex flex-1 flex-col">
                           <ul
                             role="list"
                             className="flex flex-1 flex-col gap-y-7">
                             <li>
-                              <SidebarChatList
+                              <ChatsList
+                                chats={chats}
+                                groups={groups}
+                                sessionId={session.user.id}
+                                friends={friends}
+                              />
+                            </li>
+
+                            <li>
+                              <div className="text-xs font-semibold leading-6 text-gray-400">
+                                Friends
+                              </div>
+                              <AllFriendsList
                                 friends={friends}
                                 sessionId={session.user.id}
                               />

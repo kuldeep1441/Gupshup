@@ -1,36 +1,115 @@
 "use client";
 
 import axios from "axios";
-import { FC, useRef, useState } from "react";
+import { FC, useRef, useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
 import TextareaAutosize from "react-textarea-autosize";
 import Button from "./common/Button";
+import { Message } from "@/lib/validations/message";
+import { nanoid } from "nanoid";
+
+interface ExtendedMessage extends Message {
+  status?: "pending" | "sent" | "failed";
+  tempId?: string;
+}
 
 interface ChatInputProps {
   chatId: string;
   chatName: string;
+  sessionId: string;
+  onMessageSent?: (message: ExtendedMessage) => void;
+  onStatusUpdate?: (messageId: string, status: "pending" | "sent" | "failed") => void;
 }
 
-const ChatInput: FC<ChatInputProps> = ({ chatId, chatName }) => {
+const ChatInput: FC<ChatInputProps> = ({ chatId, chatName, sessionId, onMessageSent, onStatusUpdate }) => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [input, setInput] = useState<string>("");
 
-  const sendMessage = async () => {
-    if (!input) return;
+  const sendMessage = async (retryMessageId?: string, retryText?: string) => {
+    const messageText = retryText || input.trim();
+    if (!messageText) return;
+    
     setIsLoading(true);
 
-    try {
-      await axios.post("/api/message/send", { text: input, chatId });
+    // Create optimistic message with temporary ID
+    const tempId = retryMessageId || nanoid();
+    const tempTimestamp = Date.now();
+    const optimisticMessage: ExtendedMessage = {
+      id: tempId,
+      chatId,
+      senderId: sessionId,
+      text: messageText,
+      timestamp: tempTimestamp,
+      status: "pending",
+      tempId: tempId,
+    };
+
+    // Add message optimistically so sender sees it immediately
+    if (onMessageSent) {
+      onMessageSent(optimisticMessage);
+    }
+
+    // Clear input immediately for better UX (only if not retrying)
+    if (!retryMessageId) {
       setInput("");
       textareaRef.current?.focus();
-    } catch (err) {
-      console.log(err);
-      toast.error("Something went wrong. Please try again later.");
+    }
+
+    try {
+      const response = await axios.post("/api/message/send", { text: messageText, chatId });
+      // Check if Pusher quota was exceeded
+      if (response.data?.pusherQuotaExceeded) {
+        toast.error("Message saved! Real-time delivery is temporarily unavailable. Please refresh to see new messages.", {
+          duration: 5000,
+        });
+        // Mark as sent but let user know they need to refresh
+        if (onStatusUpdate) {
+          onStatusUpdate(tempId, "sent");
+        }
+      } else {
+        // Mark as sent - will be replaced by Pusher message with real ID
+        if (onStatusUpdate) {
+          onStatusUpdate(tempId, "sent");
+        }
+      }
+    } catch (err: any) {
+      console.error("Error sending message:", err);
+      
+      // Check for Pusher quota error in response
+      if (err.response?.data?.pusherQuotaExceeded || err.response?.data?.message?.includes("quota")) {
+        toast.error("Message saved but real-time delivery unavailable. Please refresh to see new messages.", {
+          duration: 5000,
+        });
+        // Mark as sent since message was saved to Redis
+        if (onStatusUpdate) {
+          onStatusUpdate(tempId, "sent");
+        }
+      } else {
+        toast.error("Failed to send message. Click retry to try again.");
+        // Mark message as failed
+        if (onStatusUpdate) {
+          onStatusUpdate(tempId, "failed");
+        }
+        // Restore input on error (only if not retrying)
+        if (!retryMessageId) {
+          setInput(messageText);
+        }
+      }
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Expose retry function globally so Messages component can call it
+  useEffect(() => {
+    (window as any).retryMessage = (messageId: string, text: string) => {
+      sendMessage(messageId, text);
+    };
+    return () => {
+      delete (window as any).retryMessage;
+    };
+  }, []);
 
   return (
     <div className="border-t border-gray-200 px-4 pt-4 mb-2 sm:mb-0">
@@ -61,7 +140,7 @@ const ChatInput: FC<ChatInputProps> = ({ chatId, chatName }) => {
 
         <div className="absolute right-0 bottom-0 flex justify-between py-2 pl-3 pr-2">
           <div className="flex-shrin-0">
-            <Button isLoading={isLoading} onClick={sendMessage} type="submit">
+            <Button isLoading={isLoading} onClick={() => sendMessage()} type="submit">
               Post
             </Button>
           </div>

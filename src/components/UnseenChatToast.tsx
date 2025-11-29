@@ -1,7 +1,8 @@
-import { chatHrefConstructor, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { FC } from "react";
 import { toast, type Toast } from "react-hot-toast";
+import Link from "next/link";
 
 interface UnseenChatToastProps {
   t: Toast;
@@ -10,6 +11,12 @@ interface UnseenChatToastProps {
   senderImg: string;
   senderName: string;
   senderMessage: string;
+  /**
+   * Identifier of the chat/group this toast should navigate to.
+   * Using the concrete chat id avoids trying to re-construct it
+   * from user ids, which breaks for group chats.
+   */
+  chatId: string;
 }
 
 const UnseenChatToast: FC<UnseenChatToastProps> = ({
@@ -19,6 +26,7 @@ const UnseenChatToast: FC<UnseenChatToastProps> = ({
   senderImg,
   senderName,
   senderMessage,
+  chatId,
 }) => {
   return (
     <div
@@ -26,9 +34,9 @@ const UnseenChatToast: FC<UnseenChatToastProps> = ({
         "max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5",
         { "animate-enter": t.visible, "animate-leave": !t.visible }
       )}>
-      <a
+      <Link
         onClick={() => toast.dismiss(t.id)}
-        href={`/dashboard/chat/${chatHrefConstructor(sessionId, senderId)}`}
+        href={`/dashboard/chat/${chatId}`}
         className="flex-1 w-0 p-4">
         <div className="flex items-start">
           <div className="flex-shrink-0 pt-0.5">
@@ -48,7 +56,7 @@ const UnseenChatToast: FC<UnseenChatToastProps> = ({
             <p className="mt-1 text-sm text-gray-500">{senderMessage}</p>
           </div>
         </div>
-      </a>
+      </Link>
 
       <div className="flex border-l border-gray-200">
         <button
