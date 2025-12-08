@@ -109,7 +109,7 @@ const ChatInput: FC<ChatInputProps> = ({ chatId, chatName, sessionId, onMessageS
     return () => {
       delete (window as any).retryMessage;
     };
-  }, []);
+  }, [sendMessage]);
 
   return (
     <div className="border-t border-gray-200 px-4 pt-4 mb-2 sm:mb-0">

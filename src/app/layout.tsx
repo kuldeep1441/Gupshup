@@ -7,7 +7,7 @@ import AuthProvider from "@/components/AuthProvider";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "FriendChats",
+  title: "Gupshup",
   description: "A full-stack realtime messaging chat application",
 };
 
