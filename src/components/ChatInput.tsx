@@ -1,7 +1,7 @@
 "use client";
 
 import axios from "axios";
-import { FC, useRef, useState, useEffect } from "react";
+import { FC, useRef, useState, useEffect, useCallback } from "react";
 import { toast } from "react-hot-toast";
 import TextareaAutosize from "react-textarea-autosize";
 import Button from "./common/Button";
@@ -26,7 +26,7 @@ const ChatInput: FC<ChatInputProps> = ({ chatId, chatName, sessionId, onMessageS
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [input, setInput] = useState<string>("");
 
-  const sendMessage = async (retryMessageId?: string, retryText?: string) => {
+  const sendMessage = useCallback(async (retryMessageId?: string, retryText?: string) => {
     const messageText = retryText || input.trim();
     if (!messageText) return;
     
@@ -99,7 +99,7 @@ const ChatInput: FC<ChatInputProps> = ({ chatId, chatName, sessionId, onMessageS
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [input, chatId, sessionId, onMessageSent, onStatusUpdate]);
 
   // Expose retry function globally so Messages component can call it
   useEffect(() => {
